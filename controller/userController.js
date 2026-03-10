@@ -6,7 +6,9 @@ const createUser = async (req, res) => {
     const { name, email, phone, company, address } = req.body;
 
     if (!name || !email || !phone || !company || !address) {
-      return res.status(400).json({ message: "All Field Required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "All Field Required" });
     }
 
     if (!address.city || !address.zipcode || !address.geo) {
