@@ -70,8 +70,11 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     required: true,
+    unique: true,
     trim: true,
     match: [/^\S+@\S+\.\S+$/, "Invalid email"],
+    index: true,
+    lowercase: true,
   },
   password: {
     type: String,
@@ -84,6 +87,8 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true,
+    unique: true,
+    index: true,
     minlength: 10,
     maxlength: 13,
   },
@@ -94,6 +99,7 @@ const userSchema = new mongoose.Schema({
   is_deleted: {
     type: Boolean,
     default: false,
+    index: true,
   },
   isAdmin: {
     type: Boolean,
@@ -108,6 +114,9 @@ const userSchema = new mongoose.Schema({
     default: null,
   },
 });
+
+userSchema.index({ email: 1 });
+userSchema.index({ phone: 1 });
 
 const User = mongoose.model("User", userSchema);
 module.exports = User;

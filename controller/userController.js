@@ -6,7 +6,8 @@ const {
   comparePassword,
 } = require("../utils/password.bcrypt.js");
 const genrateToken = require("../utils/genrate.token.js");
-const createUser = async (req, res) => {
+
+const createUser = async (req, res, next) => {
   try {
     const { first_name, last_name, email, password, phone, address } = req.body;
 
@@ -18,9 +19,9 @@ const createUser = async (req, res) => {
       !phone.trim() ||
       !address
     ) {
-      return res
-        .status(400)
-        .json({ success: false, message: "All Field Required" });
+      const error = new Error("All Field Are Required");
+      error.status = 400;
+      return next(error);
     }
 
     if (
@@ -30,18 +31,18 @@ const createUser = async (req, res) => {
       !address.zipcode?.trim() ||
       !address.geo
     ) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Address Field Requied" });
+      const error = new Error("Address fields are required");
+      error.status = 400;
+      return next(error);
     }
 
     if (
       typeof address.geo.lat !== "number" ||
       typeof address.geo.lng !== "number"
     ) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Geo Coordinate must be number" });
+      const error = new Error("Geo coordinates must be numbers");
+      error.status = 400;
+      return next(error);
     }
 
     if (
@@ -50,10 +51,9 @@ const createUser = async (req, res) => {
       address.geo.lng < -180 ||
       address.geo.lng > 180
     ) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid latitude or longitude value",
-      });
+      const error = new Error("Invalid latitude or longitude value");
+      error.status = 400;
+      return next(error);
     }
 
     const firt_nameTrim = first_name.trim();
@@ -69,15 +69,20 @@ const createUser = async (req, res) => {
     const lng = address.geo.lng;
 
     if (!validator.isEmail(emailTrim)) {
-      return res.status(400).json({ success: false, message: "Email invalid" });
+      const error = new Error("Invalid email");
+      error.status = 400;
+      return next(error);
     }
 
-    const user = await User.findOne({ email: emailTrim, is_deleted: false });
+    const user = await User.findOne({
+      $or: [{ email: emailTrim }, { phone: phoneTrim }],
+      is_deleted: false,
+    });
 
     if (user) {
-      return res
-        .status(409)
-        .json({ success: false, message: "User Already Exists" });
+      const error = new Error("Email or phone already exists");
+      error.status = 409;
+      return next(error);
     }
     if (
       !validator.isStrongPassword(passwordTrim, {
@@ -88,18 +93,14 @@ const createUser = async (req, res) => {
         minSymbols: 1,
       })
     ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "password must have 8 character length and contain lowecase character, uppercase character, number, symbols",
-      });
+      const error = new Error(
+        "Password must contain uppercase, lowercase, number and symbol",
+      );
+      error.status = 400;
+      return next(error);
     }
     const passwordHashed = await hashPassword(passwordTrim);
-    if (!passwordHashed) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid Password" });
-    }
+
     const newUser = new User({
       first_name: firt_nameTrim,
       last_name: last_nameTrim,
@@ -120,26 +121,25 @@ const createUser = async (req, res) => {
       .status(201)
       .json({ success: true, message: "User Created Successfully!", saveUser });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message || "Internal Server Error",
-    });
+    next(error);
   }
 };
 
-const loginUser = async (req, res) => {
+const loginUser = async (req, res, next) => {
   try {
     const { email, password } = req.body;
     if (!email.trim() || !password.trim()) {
-      return res
-        .status(400)
-        .json({ success: false, message: "All Field Required" });
+      const error = new Error("Email and password required");
+      error.status = 400;
+      return next(error);
     }
     const emailTrim = email.trim().toLowerCase();
     const passwordTrim = password.trim();
 
     if (!validator.isEmail(emailTrim)) {
-      return res.status(400).json({ success: false, message: "Invalid Email" });
+      const error = new Error("Invalid email");
+      error.status = 400;
+      return next(error);
     }
 
     const user = await User.findOne({
@@ -148,36 +148,20 @@ const loginUser = async (req, res) => {
     }).select("+password");
 
     if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "No user found!" });
+      const error = new Error("User not found");
+      error.status = 404;
+      return next(error);
     }
 
     const passwordCompare = await comparePassword(passwordTrim, user.password);
 
     if (!passwordCompare) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid Password" });
+      const error = new Error("Invalid password");
+      error.status = 400;
+      return next(error);
     }
     const token = await genrateToken({ _id: user._id });
-    // const userData = {
-    //   _id: user._id,
-    //   first_name: user.first_name,
-    //   last_name: user.last_name,
-    //   email: user.email,
-    //   phone: user.phone,
-    //   address: {
-    //     city: user.address.city,
-    //     state: user.address.state,
-    //     country: user.address.country,
-    //     zipcode: user.address.zipcode,
-    //     geo: {
-    //       lat: address.geo.lat,
-    //       lng: address.geo.lng,
-    //     },
-    //   },
-    // };
+
     return res.status(200).json({
       success: true,
       message: "User Login SuccessFully!",
@@ -185,10 +169,7 @@ const loginUser = async (req, res) => {
       token: token,
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message || "Internal Server Error",
-    });
+    next(error);
   }
 };
 
@@ -203,12 +184,12 @@ const getAllUser = async (req, res) => {
       .skip(skip)
       .limit(pageSize);
 
-    const totalUsers = await User.countDocuments();
+    const totalUsers = await User.countDocuments({ is_deleted: false });
 
     if (user.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not Found!" });
+      const error = new Error("User not Found!");
+      error.status = 404;
+      return next(error);
     }
     return res.status(200).json({
       success: true,
@@ -219,9 +200,7 @@ const getAllUser = async (req, res) => {
       data: user,
     });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ success: false, message: error.message || "Server Error" });
+    next(error);
   }
 };
 
@@ -230,23 +209,23 @@ const getUserById = async (req, res) => {
     const user_id = req.params.user_id;
 
     if (!mongoose.Types.ObjectId.isValid(user_id)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid User ID" });
+      const error = new Error("Invalid user id");
+      error.status = 400;
+      return next(error);
     }
     const user = await User.findOne({ _id: user_id, is_deleted: false });
 
     if (!user) {
-      return res.status(404).json({ success: false, message: "No User Found" });
+      const error = new Error("User not found");
+      error.status = 404;
+      return next(error);
     }
 
     return res
       .status(200)
       .json({ success: true, message: "User detail: ", data: user });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ success: false, message: error.message || "Server Error" });
+    next(error);
   }
 };
 
@@ -255,40 +234,56 @@ const updateUser = async (req, res) => {
     const user_id = req.params.user_id;
 
     if (!mongoose.Types.ObjectId.isValid(user_id)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid User ID" });
+      const error = new Error("Invalid user id");
+      error.status = 400;
+      return next(error);
     }
 
-    const { email } = req.body;
+    const { email, phone } = req.body;
+
+    const emailTrim = email.trim().toLowerCase();
+    const phoneTrim = phone.trim();
 
     if (req.body.address?.geo) {
       const { lat, lng } = req.body.address.geo;
 
       if (typeof lat !== "number" || typeof lng !== "number") {
-        return res
-          .status(400)
-          .json({ success: false, message: "Geo coordinates must be numbers" });
+        const error = new Error("Geo coordinates must be numbers");
+        error.status = 400;
+        return next(error);
       }
 
       if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid latitude or longitude value",
-        });
+        const error = new Error("Invalid latitude or longitude");
+        error.status = 400;
+        return next(error);
       }
     }
 
-    if (email) {
+    if (emailTrim) {
       const duplicateEmail = await User.findOne({
-        email: email,
+        email: emailTrim,
+        is_deleted: false,
         _id: { $ne: user_id },
       });
 
       if (duplicateEmail) {
-        return res
-          .status(409)
-          .json({ success: false, message: "Email already exists" });
+        const error = new Error("Email already exists");
+        error.status = 409;
+        return next(error);
+      }
+    }
+    if (phoneTrim) {
+      const duplicatePhone = await User.findOne({
+        phone: phoneTrim,
+        is_deleted: false,
+        _id: { $ne: user_id },
+      });
+
+      if (duplicatePhone) {
+        const error = new Error("Phone already exists");
+        error.status = 409;
+        return next(error);
       }
     }
 
@@ -299,9 +294,9 @@ const updateUser = async (req, res) => {
     );
 
     if (!updatedUser) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
+      const error = new Error("User not found");
+      error.status = 404;
+      return next(error);
     }
 
     return res.status(200).json({
@@ -310,9 +305,7 @@ const updateUser = async (req, res) => {
       data: updatedUser,
     });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ success: false, message: error.message || "Server Error" });
+    next(error);
   }
 };
 
@@ -321,25 +314,23 @@ const deleteUserById = async (req, res) => {
     const user_id = req.params.user_id;
 
     if (!mongoose.Types.ObjectId.isValid(user_id)) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid User Id" });
+      const error = new Error("Invalid user id");
+      error.status = 400;
+      return next(error);
     }
 
     const user = await User.findByIdAndDelete(user_id);
 
     if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, messsage: "No User Found" });
+      const error = new Error("User not found");
+      error.status = 404;
+      return next(error);
     }
     return res
       .status(200)
       .json({ success: false, message: "User Deleted Successfully!" });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ success: false, message: error.message || "Server Error" });
+    next(error);
   }
 };
 
@@ -348,15 +339,15 @@ const deleteAllUser = async (req, res) => {
     const user = await User.deleteMany({});
 
     if (user.deletedCount === 0) {
-      return res.status(404).json({ success: false, message: "No User Found" });
+      const error = new Error("No users found");
+      error.status = 404;
+      return next(error);
     }
     return res
       .status(200)
       .json({ success: true, message: "All User Deleted!" });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ success: false, message: error.message || "Server Error" });
+    next(error);
   }
 };
 
