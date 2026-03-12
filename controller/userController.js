@@ -173,7 +173,7 @@ const loginUser = async (req, res, next) => {
   }
 };
 
-const getAllUser = async (req, res) => {
+const getAllUser = async (req, res, next) => {
   try {
     const { page_no = 1, page_size = 10 } = req.query;
     const pageNo = parseInt(page_no);
@@ -204,7 +204,7 @@ const getAllUser = async (req, res) => {
   }
 };
 
-const getUserById = async (req, res) => {
+const getUserById = async (req, res, next) => {
   try {
     const user_id = req.params.user_id;
 
@@ -229,7 +229,7 @@ const getUserById = async (req, res) => {
   }
 };
 
-const updateUser = async (req, res) => {
+const updateUser = async (req, res, next) => {
   try {
     const user_id = req.params.user_id;
 
@@ -309,7 +309,7 @@ const updateUser = async (req, res) => {
   }
 };
 
-const deleteUserById = async (req, res) => {
+const deleteUserById = async (req, res, next) => {
   try {
     const user_id = req.params.user_id;
 
@@ -328,13 +328,13 @@ const deleteUserById = async (req, res) => {
     }
     return res
       .status(200)
-      .json({ success: false, message: "User Deleted Successfully!" });
+      .json({ success: true, message: "User Deleted Successfully!" });
   } catch (error) {
     next(error);
   }
 };
 
-const deleteAllUser = async (req, res) => {
+const deleteAllUser = async (req, res, next) => {
   try {
     const user = await User.deleteMany({});
 
