@@ -5,225 +5,111 @@ const {
   hashPassword,
   comparePassword,
 } = require("../utils/password.bcrypt.js");
-const genrateToken = require("../utils/genrate.token.js");
 
-const createUser = async (req, res, next) => {
+const getMyProfile = async (req, res, next) => {
   try {
-    const { first_name, last_name, email, password, phone, address } = req.body;
+    const userId = req?.user?._id;
 
-    if (
-      !first_name?.trim() ||
-      !last_name?.trim() ||
-      !email?.trim() ||
-      !password?.trim() ||
-      !phone.trim() ||
-      !address
-    ) {
-      const error = new Error("All Field Are Required");
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      const error = new Error("Invalid user Id");
       error.status = 400;
       return next(error);
     }
-
-    if (
-      !address.city?.trim() ||
-      !address.state?.trim() ||
-      !address.country?.trim() ||
-      !address.zipcode?.trim() ||
-      !address.geo
-    ) {
-      const error = new Error("Address fields are required");
-      error.status = 400;
+    const user = await User.findOne({ _id: userId, is_deleted: false })
+      .select("-password")
+      .lean();
+    if (!user) {
+      const error = new Error("User not found");
+      error.status = 404;
       return next(error);
     }
-
-    if (
-      typeof address.geo.lat !== "number" ||
-      typeof address.geo.lng !== "number"
-    ) {
-      const error = new Error("Geo coordinates must be numbers");
-      error.status = 400;
-      return next(error);
-    }
-
-    if (
-      address.geo.lat < -90 ||
-      address.geo.lat > 90 ||
-      address.geo.lng < -180 ||
-      address.geo.lng > 180
-    ) {
-      const error = new Error("Invalid latitude or longitude value");
-      error.status = 400;
-      return next(error);
-    }
-
-    const firt_nameTrim = first_name.trim();
-    const last_nameTrim = last_name.trim();
-    const emailTrim = email.trim().toLowerCase();
-    const passwordTrim = password.trim();
-    const phoneTrim = phone.trim();
-    const cityTrim = address.city.trim().toLowerCase();
-    const stateTrim = address.state.trim().toLowerCase();
-    const countryTrim = address.country.trim().toLowerCase();
-    const zipcodeTrim = address.zipcode.trim();
-    const lat = address.geo.lat;
-    const lng = address.geo.lng;
-
-    if (!validator.isEmail(emailTrim)) {
-      const error = new Error("Invalid email");
-      error.status = 400;
-      return next(error);
-    }
-
-    const user = await User.findOne({
-      $or: [{ email: emailTrim }, { phone: phoneTrim }],
-      is_deleted: false,
+    return res.status(200).json({
+      success: true,
+      message: "Profile fetched successfully",
+      data: user,
     });
+  } catch (error) {
+    next(error);
+  }
+};
 
-    if (user) {
-      const error = new Error("Email or phone already exists");
-      error.status = 409;
+const changePassword = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      const error = new Error("Invalid User Id");
+      error.status = 400;
+      return next(error);
+    }
+    let { oldPassword, newPassword, confirmPassword } = req.body;
+    oldPassword = oldPassword?.trim();
+    newPassword = newPassword?.trim();
+    confirmPassword = confirmPassword?.trim();
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      const error = new Error("All fields are required");
+      error.status = 400;
       return next(error);
     }
     if (
-      !validator.isStrongPassword(passwordTrim, {
+      !validator.isStrongPassword(newPassword, {
         minLength: 8,
         minLowercase: 1,
-        minUppercase: 1,
         minNumbers: 1,
+        minUppercase: 1,
         minSymbols: 1,
       })
     ) {
       const error = new Error(
-        "Password must contain uppercase, lowercase, number and symbol",
+        "Password must be at least 8 characters and include upper case character, lower case character, number and symbol",
       );
       error.status = 400;
       return next(error);
     }
-    const passwordHashed = await hashPassword(passwordTrim);
 
-    const newUser = new User({
-      first_name: firt_nameTrim,
-      last_name: last_nameTrim,
-      email: emailTrim,
-      password: passwordHashed,
-      phone: phoneTrim,
-      address: {
-        city: cityTrim,
-        state: stateTrim,
-        country: countryTrim,
-        zipcode: zipcodeTrim,
-        geo: { lat: lat, lng: lng },
-      },
-    });
-
-    const saveUser = await newUser.save();
-    return res
-      .status(201)
-      .json({ success: true, message: "User Created Successfully!", saveUser });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const loginUser = async (req, res, next) => {
-  try {
-    const { email, password } = req.body;
-    if (!email.trim() || !password.trim()) {
-      const error = new Error("Email and password required");
+    if (newPassword !== confirmPassword) {
+      const error = new Error(
+        "New Password did not match with confirm password",
+      );
       error.status = 400;
       return next(error);
     }
-    const emailTrim = email.trim().toLowerCase();
-    const passwordTrim = password.trim();
-
-    if (!validator.isEmail(emailTrim)) {
-      const error = new Error("Invalid email");
-      error.status = 400;
-      return next(error);
-    }
-
     const user = await User.findOne({
-      email: emailTrim,
+      _id: userId,
       is_deleted: false,
     }).select("+password");
-
     if (!user) {
       const error = new Error("User not found");
       error.status = 404;
       return next(error);
     }
+    const isMatch = await comparePassword(oldPassword, user.password);
 
-    const passwordCompare = await comparePassword(passwordTrim, user.password);
-
-    if (!passwordCompare) {
-      const error = new Error("Invalid password");
+    if (!isMatch) {
+      const error = new Error("Old password is incorrect");
       error.status = 400;
       return next(error);
     }
-    const token = await genrateToken({ _id: user._id });
+    const isSamePassword = await comparePassword(newPassword, user.password);
 
-    return res.status(200).json({
-      success: true,
-      message: "User Login SuccessFully!",
-      data: user,
-      token: token,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const getAllUser = async (req, res, next) => {
-  try {
-    const { page_no = 1, page_size = 10 } = req.query;
-    const pageNo = parseInt(page_no);
-    const pageSize = parseInt(page_size);
-    const skip = (pageNo - 1) * pageSize;
-
-    const user = await User.find({ is_deleted: false, isAdmin: false })
-      .skip(skip)
-      .limit(pageSize);
-
-    const totalUsers = await User.countDocuments({ is_deleted: false });
-
-    if (user.length === 0) {
-      const error = new Error("User not Found!");
-      error.status = 404;
-      return next(error);
-    }
-    return res.status(200).json({
-      success: true,
-      message: "All User details: ",
-      page_no: pageNo,
-      page_size: pageSize,
-      total_users: totalUsers,
-      data: user,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const getUserById = async (req, res, next) => {
-  try {
-    const user_id = req.params.user_id;
-
-    if (!mongoose.Types.ObjectId.isValid(user_id)) {
-      const error = new Error("Invalid user id");
+    if (isSamePassword) {
+      const error = new Error(
+        "New password must be different from the current password",
+      );
       error.status = 400;
       return next(error);
     }
-    const user = await User.findOne({ _id: user_id, is_deleted: false });
 
-    if (!user) {
-      const error = new Error("User not found");
-      error.status = 404;
-      return next(error);
-    }
+    const hashedPassword = await hashPassword(newPassword);
+
+    user.password = hashedPassword;
+    user.updatedAt = new Date();
+    await user.save();
 
     return res
       .status(200)
-      .json({ success: true, message: "User detail: ", data: user });
+      .json({ success: true, message: "Password changed successfully" });
   } catch (error) {
     next(error);
   }
@@ -231,7 +117,7 @@ const getUserById = async (req, res, next) => {
 
 const updateUser = async (req, res, next) => {
   try {
-    const user_id = req.params.user_id;
+    const user_id = req.user._id;
 
     if (!mongoose.Types.ObjectId.isValid(user_id)) {
       const error = new Error("Invalid user id");
@@ -239,13 +125,33 @@ const updateUser = async (req, res, next) => {
       return next(error);
     }
 
-    const { email, phone } = req.body;
+    const { email, phone, address } = req.body;
 
-    const emailTrim = email.trim().toLowerCase();
-    const phoneTrim = phone.trim();
+    const emailTrim = email?.trim()?.toLowerCase();
+    const phoneTrim = phone?.trim();
 
-    if (req.body.address?.geo) {
-      const { lat, lng } = req.body.address.geo;
+    // Prevent restricted updates
+    if ("password" in req.body) {
+      const error = new Error("Password cannot be updated here");
+      error.status = 400;
+      return next(error);
+    }
+
+    if ("isAdmin" in req.body) {
+      const error = new Error("isAdmin cannot be updated here");
+      error.status = 400;
+      return next(error);
+    }
+
+    if ("is_deleted" in req.body) {
+      const error = new Error("is_deleted cannot be updated here");
+      error.status = 400;
+      return next(error);
+    }
+
+    // Validate GEO coordinates if provided
+    if (address?.geo) {
+      const { lat, lng } = address.geo;
 
       if (typeof lat !== "number" || typeof lng !== "number") {
         const error = new Error("Geo coordinates must be numbers");
@@ -260,6 +166,7 @@ const updateUser = async (req, res, next) => {
       }
     }
 
+    // Email duplicate check
     if (emailTrim) {
       const duplicateEmail = await User.findOne({
         email: emailTrim,
@@ -273,6 +180,8 @@ const updateUser = async (req, res, next) => {
         return next(error);
       }
     }
+
+    // Phone duplicate check
     if (phoneTrim) {
       const duplicatePhone = await User.findOne({
         phone: phoneTrim,
@@ -287,11 +196,36 @@ const updateUser = async (req, res, next) => {
       }
     }
 
-    const updatedUser = await User.findByIdAndUpdate(
-      user_id,
-      { $set: req.body },
+    // Allowed fields
+    const updateData = {};
+
+    if (req.body.first_name !== undefined) {
+      updateData.first_name = req.body.first_name?.trim();
+    }
+
+    if (req.body.last_name !== undefined) {
+      updateData.last_name = req.body.last_name?.trim();
+    }
+
+    if (emailTrim) {
+      updateData.email = emailTrim;
+    }
+
+    if (phoneTrim) {
+      updateData.phone = phoneTrim;
+    }
+
+    if (address !== undefined) {
+      updateData.address = address;
+    }
+
+    updateData.updatedAt = new Date();
+
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: user_id, is_deleted: false },
+      { $set: updateData },
       { new: true, runValidators: true },
-    );
+    ).select("-password");
 
     if (!updatedUser) {
       const error = new Error("User not found");
@@ -309,9 +243,9 @@ const updateUser = async (req, res, next) => {
   }
 };
 
-const deleteUserById = async (req, res, next) => {
+const softDeleteUser = async (req, res, next) => {
   try {
-    const user_id = req.params.user_id;
+    const user_id = req.params.id;
 
     if (!mongoose.Types.ObjectId.isValid(user_id)) {
       const error = new Error("Invalid user id");
@@ -319,44 +253,56 @@ const deleteUserById = async (req, res, next) => {
       return next(error);
     }
 
-    const user = await User.findByIdAndDelete(user_id);
+    if (req.user._id.toString() !== user_id && !req.user.isAdmin) {
+      const error = new Error("Unauthorized to delete this account");
+      error.status = 403;
+      return next(error);
+    }
+
+    const user = await User.findOneAndUpdate(
+      {
+        _id: user_id,
+        is_deleted: false,
+        isAdmin: false,
+      },
+      {
+        is_deleted: true,
+        updatedAt: new Date(),
+      },
+      { new: true },
+    );
 
     if (!user) {
       const error = new Error("User not found");
       error.status = 404;
       return next(error);
     }
-    return res
-      .status(200)
-      .json({ success: true, message: "User Deleted Successfully!" });
+
+    return res.status(200).json({
+      success: true,
+      message: "User soft deleted successfully",
+    });
   } catch (error) {
     next(error);
   }
 };
 
-const deleteAllUser = async (req, res, next) => {
+const logoutUser = async (req, res, next) => {
   try {
-    const user = await User.deleteMany({});
-
-    if (user.deletedCount === 0) {
-      const error = new Error("No users found");
-      error.status = 404;
-      return next(error);
-    }
-    return res
-      .status(200)
-      .json({ success: true, message: "All User Deleted!" });
+    res.clearCookie("token");
+    return res.status(200).json({
+      success: true,
+      message: "User logged out successfully",
+    });
   } catch (error) {
     next(error);
   }
 };
 
 module.exports = {
-  createUser,
-  loginUser,
-  getAllUser,
-  getUserById,
+  getMyProfile,
   updateUser,
-  deleteUserById,
-  deleteAllUser,
+  changePassword,
+  softDeleteUser,
+  logoutUser,
 };

@@ -4,7 +4,7 @@ const geoSchema = new mongoose.Schema(
   {
     lat: {
       type: Number,
-      require: true,
+      required: true,
       min: -90,
       max: 90,
     },
@@ -115,8 +115,9 @@ const userSchema = new mongoose.Schema({
   },
 });
 
-userSchema.index({ email: 1 });
-userSchema.index({ phone: 1 });
+userSchema.index({ email: 1, is_deleted: 1 });
+userSchema.index({ phone: 1, is_deleted: 1 });
+userSchema.index({ is_deleted: 1, isAdmin: 1 });
 
 const User = mongoose.model("User", userSchema);
 module.exports = User;

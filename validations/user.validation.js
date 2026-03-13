@@ -7,6 +7,7 @@ const createUserSchema = Joi.object({
   password: Joi.string()
     .min(8)
     .pattern(/[a-z]/)
+    .pattern(/[A-Z]/)
     .pattern(/[0-9]/)
     .pattern(/[!@#$%^&*]/)
     .required(),
@@ -27,5 +28,10 @@ const loginSchema = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().required(),
 });
+const changePasswordSchema = Joi.object({
+  oldPassword: Joi.string().required(),
+  newPassword: Joi.string().min(8).required(),
+  confirmPassword: Joi.string().required(),
+});
 
-module.exports = { createUserSchema, loginSchema };
+module.exports = { createUserSchema, loginSchema, changePasswordSchema };
