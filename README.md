@@ -1,15 +1,18 @@
 # User Management API
 
-A RESTful API built using Node.js, Express, and MongoDB for managing users.
+A Node.js + Express + MongoDB REST API for managing users with authentication, authorization, soft delete, and admin management features.
 
-## API
+This API supports:
 
-- Create User
-- Get All Users
-- Get User By ID
-- Update User
-- Delete User By ID
-- Delete All Users
+- User registration and login
+- JWT authentication
+- Profile management
+- Password change
+- Soft delete for users
+- Admin management APIs
+- Pagination
+- Input validation
+- Secure password hashing
 
 ---
 
@@ -19,79 +22,149 @@ A RESTful API built using Node.js, Express, and MongoDB for managing users.
 - Express.js
 - MongoDB
 - Mongoose
-- dotenv
-- CORS
+- JWT Authentication
+- bcrypt
+- Joi Validation
+- Validator.js
+
+---
+
+## Project Structure
+
+```
+user-management/
+│
+├── config/
+│ └── db.js
+│
+├── controller/
+│ ├── adminController.js
+│ ├── authController.js
+│ └── userController.js
+│
+├── middlewares/
+│ ├── admin.middleware.js
+│ ├── auth.middleware.js
+│ ├── error.middleware.js
+│ └── validation.middleware.js
+│
+├── models/
+│ └── userModel.js
+│
+├── router/
+│ ├── adminRouter.js
+│ ├── authRouter.js
+│ └── userRouter.js
+│
+├── utils/
+│ ├── generateToken.js
+│ └── password.bcrypt.js
+│
+├── validations/
+│ └── user.validation.js
+│
+├── server.js
+└── package.json
+```
 
 ---
 
 ## Installation
 
-1. Clone the repository
+### 1️⃣ Clone the repository
 
 ```
-git clone https://github.com/anubhav-uchiha/user-management
-
+git clone https://github.com/anubhav-uchiha/user-management.git
+cd assignment
 ```
 
-2. Navigate into project folder
-
-```
-cd your-repo-name
-```
-
-3. Install dependencies
+### 2️⃣ Install dependencies
 
 ```
 npm install
 ```
 
-4. Create `.env` file in root directory
+### 3️⃣ Create .env file
 
 ```
 PORT=4000
-MONGO_URI=mongodb://localhost:27017/management
+MONGO_URI=your_mongodb_connection_string
+JWT_SECRET=your_secret_key
 ```
 
-5. Start the server
+**Example:**
+
+```
+PORT=4000
+MONGO_URI=mongodb://127.0.0.1:27017/user_management
+JWT_SECRET=supersecretkey
+```
+
+---
+
+## Run the Project
+
+### Development Mode
 
 ```
 npm run dev
 ```
 
-or
+### Production Mode
 
 ```
-node server.js
+npm start
+```
+
+**Server will run at:**
+
+```
+http://localhost:4000
+```
+
+---
+
+## Authentication
+
+This API uses JWT Token Authentication.
+
+**Include the token in headers:**
+
+```
+Authorization: Bearer <token>
 ```
 
 ---
 
 ## API Endpoints
 
-### Base URL
-
-```
-http://localhost:4000/api/users
-```
-
----
+## Auth APIs
 
 ### Create User
 
-**POST** `http://localhost:4000/api/createUser`
+**POST**
+
+```
+/api/auth/createUser
+```
+
+**Request Body:**
 
 ```json
 {
-  "name": "John Doe",
+  "first_name": "John",
+  "last_name": "Doe",
   "email": "john@example.com",
+  "password": "Password@123",
   "phone": "9876543210",
-  "company": "Tech Corp",
   "address": {
-    "city": "Delhi",
-    "zipcode": "110001",
+    "city": "Mumbai",
+    "state": "Maharashtra",
+    "country": "India",
+    "zipcode": "400001",
     "geo": {
-      "lat": "28.6139",
-      "lng": "77.2090"
+      "lat": 19.076,
+      "lng": 72.8777
     }
   }
 }
@@ -99,64 +172,269 @@ http://localhost:4000/api/users
 
 ---
 
-### Get All Users
+### Login User
 
-**GET** `http://localhost:4000/api/getAllUser`
+**POST**
+
+```
+/api/auth/loginUser
+```
+
+**Request Body**
+
+```json
+{
+  "email": "john@example.com",
+  "password": "Password@123"
+}
+```
+
+Response returns JWT token.
 
 ---
 
-### Get User By ID
+## User APIs
 
-**GET** `http://localhost:4000/api/getUserById/:user_id`
+(Requires Authentication)
+
+### Get My Profile
+
+**GET**
+
+```
+/api/user/getProfile
+```
 
 ---
 
 ### Update User
 
-**PUT** `http://localhost:4000/api/updateUser/:user_id`
+**PUT**
 
-Body (any fields you want to update):
+```
+/api/user/updateUser
+```
+
+**Example Body:**
 
 ```json
 {
-  "name": "Updated Name"
+  "first_name": "John",
+  "last_name": "Smith"
 }
-
-{
-  "address.city": "Updated Name"
-}
-
-{
-  "address.geo.lat": "Updated Name"
-}
-
 ```
 
 ---
 
-### Delete User By ID
+### Change Password
 
-**DELETE** `http://localhost:4000/api/deleteUserById/:user_id`
+**PUT**
+
+```
+/api/user/changePassword
+```
+
+**Request Body**
+
+```json
+{
+  "oldPassword": "Password@123",
+  "newPassword": "NewPassword@123",
+  "confirmPassword": "NewPassword@123"
+}
+```
+
+---
+
+### Soft Delete User
+
+**Users can delete their own account.**
+
+**DELETE**
+
+```
+/api/user/softDeleteUser/:id
+```
+
+**This sets:**
+
+```
+is_deleted = true
+```
+
+**User data remains in database.**
+
+---
+
+### Logout
+
+**POST**
+
+```
+/api/user/logout
+```
+
+---
+
+## Admin APIs
+
+Requires Admin Authentication
+
+### Get All Users
+
+**GET**
+
+```
+/api/admin/getAllUser?page_no=1&page_size=10
+```
+
+- Supports pagination.
+
+**Response:**
+
+```
+page_no
+page_size
+total_users
+total_pages
+```
+
+---
+
+### Get User By ID
+
+**GET**
+
+```
+/api/admin/getUserById/:id
+```
+
+---
+
+### Delete User Permanently
+
+**DELETE**
+
+```
+/api/admin/deleteUserById/:id
+```
+
+- This performs hard delete from database.
 
 ---
 
 ### Delete All Users
 
-**DELETE** `http://localhost:4000/api/deleteAllUser/`
+**DELETE**
+
+```
+/api/admin/deleteAllUser
+```
+
+Deletes all non-admin users permanently.
 
 ---
 
-## Validation Rules
+## Database Schema
 
-- Valid MongoDB ObjectId required
-- Latitude must be between -90 and 90
-- Longitude must be between -180 and 180
-- Proper error responses with status codes
+### User Schema
+
+Fields:
+
+- first_name
+- last_name
+- email
+- password
+- phone
+- address
+- is_deleted
+- isAdmin
+- createdAt
+- updatedAt
 
 ---
+
+### Address Structure:
+
+```
+address
+├── city
+├── state
+├── country
+├── zipcode
+└── geo
+     ├── lat
+     └── lng
+```
+
+---
+
+## Security Features
+
+- Password hashing using bcrypt
+- JWT authentication
+- Admin authorization middleware
+- Input validation using Joi
+- Soft delete protection
+- Duplicate email/phone protection
+- Strong password validation
+
+---
+
+## Middlewares
+
+### Authentication Middleware
+
+- Validates JWT token.
+
+## Admin Middleware
+
+- Allows access only to admin users.
+
+## Validation Middleware
+
+- Validates request body using Joi schemas.
+
+## Error Middleware
+
+- Handles application errors centrally.
+
+Error Response Format
+
+```json
+{
+  "success": false,
+  "message": "Error message"
+}
+```
+
+Success Response Format
+
+```json
+{
+  "success": true,
+  "message": "Success message",
+  "data": {}
+}
+```
+
+## Dependencies
+
+### Main packages used:
+
+- express
+- mongoose
+- jsonwebtoken
+- bcrypt
+- joi
+- validator
+- cors
+- dotenv
+
+## Development:
+
+nodemon
 
 ## Author
 
 Anubhav Kumar
-
----
