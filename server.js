@@ -1,9 +1,10 @@
 require("dotenv").config();
 const express = require("express");
-const mongoose = require("mongoose");
 const cors = require("cors");
 const connectDB = require("./config/db");
 const userRouter = require("./router/userRouter");
+const authRouter = require("./router/authRouter");
+const adminRouter = require("./router/adminRouter");
 const errorHandler = require("./middlewares/error.middleware");
 const PORT = process.env.PORT || 4000;
 const app = express();
@@ -16,7 +17,9 @@ app.get("/", (req, res) => {
   res.send("API is Running...");
 });
 
-app.use("/api/users", userRouter);
+app.use("/api/user", userRouter);
+app.use("/api/auth", authRouter);
+app.use("/api/admin", adminRouter);
 
 app.use((req, res, next) => {
   const error = new Error("Route Not Found");

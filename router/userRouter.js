@@ -12,7 +12,7 @@ const { changePasswordSchema } = require("../validations/user.validation");
 const router = express.Router();
 
 router.get("/getProfile", authenticateUser, getMyProfile);
-router.put(
+router.patch(
   "/changePassword",
   authenticateUser,
   validate(changePasswordSchema),
