@@ -33,88 +33,6 @@ const getMyProfile = async (req, res, next) => {
   }
 };
 
-const changePassword = async (req, res, next) => {
-  try {
-    const userId = req.user._id;
-
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      const error = new Error("Invalid User Id");
-      error.status = 400;
-      return next(error);
-    }
-    let { oldPassword, newPassword, confirmPassword } = req.body;
-    oldPassword = oldPassword?.trim();
-    newPassword = newPassword?.trim();
-    confirmPassword = confirmPassword?.trim();
-
-    if (!oldPassword || !newPassword || !confirmPassword) {
-      const error = new Error("All fields are required");
-      error.status = 400;
-      return next(error);
-    }
-    if (
-      !validator.isStrongPassword(newPassword, {
-        minLength: 8,
-        minLowercase: 1,
-        minNumbers: 1,
-        minUppercase: 1,
-        minSymbols: 1,
-      })
-    ) {
-      const error = new Error(
-        "Password must be at least 8 characters and include upper case character, lower case character, number and symbol",
-      );
-      error.status = 400;
-      return next(error);
-    }
-
-    if (newPassword !== confirmPassword) {
-      const error = new Error(
-        "New Password did not match with confirm password",
-      );
-      error.status = 400;
-      return next(error);
-    }
-    const user = await User.findOne({
-      _id: userId,
-      is_deleted: false,
-    }).select("+password");
-    if (!user) {
-      const error = new Error("User not found");
-      error.status = 404;
-      return next(error);
-    }
-    const isMatch = await comparePassword(oldPassword, user.password);
-
-    if (!isMatch) {
-      const error = new Error("Old password is incorrect");
-      error.status = 400;
-      return next(error);
-    }
-    const isSamePassword = await comparePassword(newPassword, user.password);
-
-    if (isSamePassword) {
-      const error = new Error(
-        "New password must be different from the current password",
-      );
-      error.status = 400;
-      return next(error);
-    }
-
-    const hashedPassword = await hashPassword(newPassword);
-
-    user.password = hashedPassword;
-    user.updatedAt = new Date();
-    await user.save();
-
-    return res
-      .status(200)
-      .json({ success: true, message: "Password changed successfully" });
-  } catch (error) {
-    next(error);
-  }
-};
-
 const updateUser = async (req, res, next) => {
   try {
     const user_id = req.user._id;
@@ -243,6 +161,90 @@ const updateUser = async (req, res, next) => {
   }
 };
 
+const changePassword = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      const error = new Error("Invalid User Id");
+      error.status = 400;
+      return next(error);
+    }
+    let { oldPassword, newPassword, confirmPassword } = req.body;
+    oldPassword = oldPassword?.trim();
+    newPassword = newPassword?.trim();
+    confirmPassword = confirmPassword?.trim();
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      const error = new Error("All fields are required");
+      error.status = 400;
+      return next(error);
+    }
+    if (
+      !validator.isStrongPassword(newPassword, {
+        minLength: 8,
+        minLowercase: 1,
+        minNumbers: 1,
+        minUppercase: 1,
+        minSymbols: 1,
+      })
+    ) {
+      const error = new Error(
+        "Password must be at least 8 characters and include upper case character, lower case character, number and symbol",
+      );
+      error.status = 400;
+      return next(error);
+    }
+
+    if (newPassword !== confirmPassword) {
+      const error = new Error(
+        "New Password did not match with confirm password",
+      );
+      error.status = 400;
+      return next(error);
+    }
+    const user = await User.findOne({
+      _id: userId,
+      is_deleted: false,
+    }).select("+password");
+    if (!user) {
+      const error = new Error("User not found");
+      error.status = 404;
+      return next(error);
+    }
+    const isMatch = await comparePassword(oldPassword, user.password);
+
+    if (!isMatch) {
+      const error = new Error("Old password is incorrect");
+      error.status = 400;
+      return next(error);
+    }
+    const isSamePassword = await comparePassword(newPassword, user.password);
+
+    if (isSamePassword) {
+      const error = new Error(
+        "New password must be different from the current password",
+      );
+      error.status = 400;
+      return next(error);
+    }
+
+    const hashedPassword = await hashPassword(newPassword);
+
+    user.password = hashedPassword;
+    user.updatedAt = new Date();
+    await user.save();
+
+    return res
+      .status(200)
+      .json({ success: true, message: "Password changed successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const forgotPassword = async (req, res, next) => {};
+
 const softDeleteUser = async (req, res, next) => {
   try {
     const user_id = req.params.id;
@@ -289,7 +291,11 @@ const softDeleteUser = async (req, res, next) => {
 
 const logoutUser = async (req, res, next) => {
   try {
-    res.clearCookie("token");
+    const userId = req.user._id;
+    await User.findByIdAndUpdate(userId, {
+      refreshToken: null,
+      refreshTokenExpirey: null,
+    });
     return res.status(200).json({
       success: true,
       message: "User logged out successfully",

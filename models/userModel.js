@@ -96,6 +96,15 @@ const userSchema = new mongoose.Schema({
     type: addressSchema,
     required: true,
   },
+  refreshToken: {
+    type: String,
+    default: null,
+    select: false,
+  },
+  refreshTokenExpirey: {
+    type: Date,
+    default: null,
+  },
   is_deleted: {
     type: Boolean,
     default: false,

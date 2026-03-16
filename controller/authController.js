@@ -5,6 +5,8 @@ const {
   comparePassword,
 } = require("../utils/password.bcrypt.js");
 const genrateToken = require("../utils/genrate.token.js");
+const generateRefreshToken = require("../utils/generate.refresh.token.js");
+const hashToken = require("../utils/hash.token.js");
 
 const createUser = async (req, res, next) => {
   try {
@@ -155,7 +157,16 @@ const loginUser = async (req, res, next) => {
       return next(error);
     }
 
-    const token = genrateToken({ _id: user._id, isAdmin: user.isAdmin });
+    const accessToken = genrateToken({ _id: user._id, isAdmin: user.isAdmin });
+
+    const refreshToken = generateRefreshToken({ _id: user._id });
+
+    const hashedRefreshToken = hashToken(refreshToken);
+
+    user.refreshToken = hashedRefreshToken;
+    user.refreshTokenExpirey = Date.now() + 7 * 24 * 60 * 60 * 1000;
+
+    await user.save();
 
     user.password = undefined;
 
@@ -163,11 +174,53 @@ const loginUser = async (req, res, next) => {
       success: true,
       message: "User Login SuccessFully!",
       data: user,
-      token: token,
+      token: accessToken,
+      refreshToken: refreshToken,
     });
   } catch (error) {
     next(error);
   }
 };
 
-module.exports = { createUser, loginUser };
+const refreshAccessToken = async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(401).json({
+        success: false,
+        message: "Refresh token required",
+      });
+    }
+
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+
+    const hashedToken = hashToken(refreshToken);
+
+    const user = await user
+      .findOne({
+        _id: decoded._id,
+        refreshToken: hashToken,
+        is_deleted: false,
+      })
+      .select("+refreshToken");
+    if (!user) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Invalid refresh " });
+    }
+
+    const newAccessToken = genrateToken({
+      _id: user._id,
+      isAdmin: user.isAdmin,
+    });
+    return res.status(200).json({
+      success: true,
+      accessToken: newAccessToken,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { createUser, loginUser, refreshAccessToken };
