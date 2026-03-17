@@ -65,6 +65,66 @@ const getUserById = async (req, res, next) => {
   }
 };
 
+const blockUser = async (req, res, next) => {
+  try {
+    const user_id = req.params.id;
+    const { days, reason } = req.body;
+    const parsedDays = parseInt(days);
+
+    if (!mongoose.Types.ObjectId.isValid(user_id)) {
+      return res.status(400).json({ message: "Invalid user" });
+    }
+
+    if (req.user._id.toString() === user_id) {
+      return res.status(400).json({ message: "You cannot block yourself" });
+    }
+
+    const user = await User.findById(user_id);
+
+    if (!user || user.is_deleted) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.isAdmin) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Admin user cannot be blocked" });
+    }
+
+    if (user.isBlocked) {
+      return res.status(400).json({
+        success: false,
+        message: "User is already blocked",
+      });
+    }
+
+    user.isBlocked = true;
+    user.blockReason = reason || "No reason provided";
+    user.updatedAt = new Date();
+
+    if (parsedDays && parsedDays > 0) {
+      user.blockedUntil = new Date(
+        Date.now() + parsedDays * 24 * 60 * 60 * 1000,
+      );
+    } else {
+      user.blockedUntil = null;
+    }
+
+    user.refreshToken = null;
+    user.refreshTokenExpirey = null;
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: user.blockedUntil
+        ? `User blocked for ${parsedDays} days`
+        : "User permanently blocked",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const deleteUserById = async (req, res, next) => {
   try {
     const user_id = req.params.id;
@@ -110,4 +170,10 @@ const deleteAllUser = async (req, res, next) => {
   }
 };
 
-module.exports = { getAllUser, getUserById, deleteUserById, deleteAllUser };
+module.exports = {
+  getAllUser,
+  getUserById,
+  blockUser,
+  deleteUserById,
+  deleteAllUser,
+};

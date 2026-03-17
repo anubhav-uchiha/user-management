@@ -110,6 +110,21 @@ const userSchema = new mongoose.Schema({
     default: false,
     index: true,
   },
+  blockReason: {
+    type: String,
+    required: false,
+    default: "",
+    trim: true,
+  },
+  isBlocked: {
+    type: Boolean,
+    default: false,
+    index: true,
+  },
+  blockedUntil: {
+    type: Date,
+    default: null,
+  },
   isAdmin: {
     type: Boolean,
     default: false,

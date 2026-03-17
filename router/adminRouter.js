@@ -6,6 +6,7 @@ const authorizedAdmin = require("../middlewares/admin.middleware");
 const {
   getAllUser,
   getUserById,
+  blockUser,
   deleteUserById,
   deleteAllUser,
 } = require("../controller/adminController");
@@ -14,6 +15,7 @@ const router = express.Router();
 
 router.get("/getAllUser", authenticateUser, authorizedAdmin, getAllUser);
 router.get("/getUserById/:id", authenticateUser, authorizedAdmin, getUserById);
+router.patch("/blockUser/:id", authenticateUser, authorizedAdmin, blockUser);
 router.delete(
   "/deleteUserById/:id",
   authenticateUser,
