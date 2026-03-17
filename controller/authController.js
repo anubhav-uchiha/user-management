@@ -1,4 +1,5 @@
 const validator = require("validator");
+const jwt = require("jsonwebtoken");
 const User = require("../models/userModel");
 const {
   hashPassword,
@@ -157,6 +158,25 @@ const loginUser = async (req, res, next) => {
       return next(error);
     }
 
+    if (user.isBlocked) {
+      if (user.blockedUntil && user.blockedUntil > new Date()) {
+        const error = new Error(`Blocked until ${user.blockedUntil}`);
+        error.status = 403;
+        return next(error);
+      }
+
+      if (!user.blockedUntil) {
+        const error = new Error("Account permanently Blocked");
+        error.status = 403;
+        return next(error);
+      }
+      if (user.blockedUntil <= new Date()) {
+        user.isBlocked = false;
+        user.blockedUntil = null;
+        await user.save();
+      }
+    }
+
     const accessToken = genrateToken({ _id: user._id, isAdmin: user.isAdmin });
 
     const refreshToken = generateRefreshToken({ _id: user._id });
@@ -197,17 +217,41 @@ const refreshAccessToken = async (req, res, next) => {
 
     const hashedToken = hashToken(refreshToken);
 
-    const user = await user
-      .findOne({
-        _id: decoded._id,
-        refreshToken: hashToken,
-        is_deleted: false,
-      })
-      .select("+refreshToken");
+    const user = await User.findOne({
+      _id: decoded._id,
+      refreshToken: hashedToken,
+      is_deleted: false,
+    }).select("+refreshToken refreshTokenExpirey");
+
     if (!user) {
       return res
         .status(403)
         .json({ success: false, message: "Invalid refresh " });
+    }
+
+    if (user.refreshTokenExpirey < Date.now()) {
+      return res.status(403).json({
+        success: false,
+        message: "Refresh token expired",
+      });
+    }
+
+    if (user.isBlocked) {
+      if (!user.blockedUntil) {
+        return res
+          .status(403)
+          .json({ success: false, message: "User permanently blocked" });
+      }
+
+      if (user.blockedUntil > new Date()) {
+        return res.status(403).json({
+          success: false,
+          message: `User blocked until ${user.blockedUntil}`,
+        });
+      }
+      user.isBlocked = false;
+      user.blockedUntil = null;
+      await user.save();
     }
 
     const newAccessToken = genrateToken({

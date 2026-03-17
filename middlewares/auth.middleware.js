@@ -29,6 +29,28 @@ const authenticateUser = async (req, res, next) => {
       });
     }
 
+    if (user.isBlocked) {
+      if (user.blockedUntil && user.blockedUntil > new Date()) {
+        return res.status(403).json({
+          success: false,
+          message: `User is blocked unitl ${user.blockedUntil}`,
+        });
+      }
+
+      if (!user.blockedUntil) {
+        return res.status(403).json({
+          success: false,
+          message: "User is permanently blocked",
+        });
+      }
+
+      if (user.blockedUntil <= new Date()) {
+        user.isBlocked = false;
+        user.blockedUntil = null;
+        await user.save();
+      }
+    }
+
     req.user = user;
     next();
   } catch (error) {
