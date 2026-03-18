@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/userModel");
+const checkBlockedUser = require("../utils/checkBlockStatus");
 
 const authenticateUser = async (req, res, next) => {
   try {
@@ -20,7 +21,7 @@ const authenticateUser = async (req, res, next) => {
     const user = await User.findOne({
       _id: decoded._id,
       is_deleted: false,
-    }).select("-password");
+    }).select("_id isAdmin isBlocked blockedUntil");
 
     if (!user) {
       return res.status(401).json({
@@ -29,26 +30,13 @@ const authenticateUser = async (req, res, next) => {
       });
     }
 
-    if (user.isBlocked) {
-      if (user.blockedUntil && user.blockedUntil > new Date()) {
-        return res.status(403).json({
-          success: false,
-          message: `User is blocked unitl ${user.blockedUntil}`,
-        });
-      }
+    const blockStatus = await checkBlockedUser(user);
 
-      if (!user.blockedUntil) {
-        return res.status(403).json({
-          success: false,
-          message: "User is permanently blocked",
-        });
-      }
-
-      if (user.blockedUntil <= new Date()) {
-        user.isBlocked = false;
-        user.blockedUntil = null;
-        await user.save();
-      }
+    if (blockStatus.blocked) {
+      return res.status(blockStatus.status).json({
+        success: false,
+        message: blockStatus.message,
+      });
     }
 
     req.user = user;

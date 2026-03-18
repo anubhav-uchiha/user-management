@@ -4,6 +4,7 @@ const {
   changePassword,
   updateUser,
   softDeleteUser,
+  logoutUser,
 } = require("../controller/userController");
 const authenticateUser = require("../middlewares/auth.middleware");
 const validate = require("../middlewares/validation.middleware");
@@ -20,5 +21,6 @@ router.patch(
 );
 router.put("/updateUser", authenticateUser, updateUser);
 router.delete("/softDeleteUser/:id", authenticateUser, softDeleteUser);
+router.post("/lougout", authenticateUser, logoutUser);
 
 module.exports = router;

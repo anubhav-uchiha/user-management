@@ -5,9 +5,10 @@ const {
   hashPassword,
   comparePassword,
 } = require("../utils/password.bcrypt.js");
-const genrateToken = require("../utils/genrate.token.js");
+const generateToken = require("../utils/generate.token.js");
 const generateRefreshToken = require("../utils/generate.refresh.token.js");
 const hashToken = require("../utils/hash.token.js");
+const checkBlockedUser = require("../utils/checkBlockStatus.js");
 
 const createUser = async (req, res, next) => {
   try {
@@ -82,7 +83,7 @@ const createUser = async (req, res, next) => {
     });
 
     if (user) {
-      const error = new Error("Email or phone already exists");
+      const error = new Error("User with this email or phone already exists");
       error.status = 409;
       return next(error);
     }
@@ -158,33 +159,22 @@ const loginUser = async (req, res, next) => {
       return next(error);
     }
 
-    if (user.isBlocked) {
-      if (user.blockedUntil && user.blockedUntil > new Date()) {
-        const error = new Error(`Blocked until ${user.blockedUntil}`);
-        error.status = 403;
-        return next(error);
-      }
-
-      if (!user.blockedUntil) {
-        const error = new Error("Account permanently Blocked");
-        error.status = 403;
-        return next(error);
-      }
-      if (user.blockedUntil <= new Date()) {
-        user.isBlocked = false;
-        user.blockedUntil = null;
-        await user.save();
-      }
+    const blockStatus = await checkBlockedUser(user);
+    if (blockStatus.blocked) {
+      return res.status(blockStatus.status).json({
+        success: false,
+        message: blockStatus.message,
+      });
     }
 
-    const accessToken = genrateToken({ _id: user._id, isAdmin: user.isAdmin });
+    const accessToken = generateToken({ _id: user._id, isAdmin: user.isAdmin });
 
     const refreshToken = generateRefreshToken({ _id: user._id });
 
     const hashedRefreshToken = hashToken(refreshToken);
 
     user.refreshToken = hashedRefreshToken;
-    user.refreshTokenExpirey = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    user.refreshTokenExpiry = Date.now() + 7 * 24 * 60 * 60 * 1000;
 
     await user.save();
 
@@ -213,7 +203,14 @@ const refreshAccessToken = async (req, res, next) => {
       });
     }
 
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    } catch (error) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Invalid or expired refresh token" });
+    }
 
     const hashedToken = hashToken(refreshToken);
 
@@ -221,46 +218,43 @@ const refreshAccessToken = async (req, res, next) => {
       _id: decoded._id,
       refreshToken: hashedToken,
       is_deleted: false,
-    }).select("+refreshToken refreshTokenExpirey");
+    }).select("+refreshToken refreshTokenExpiry");
 
-    if (!user) {
+    if (!user || user.refreshToken !== hashedToken) {
       return res
         .status(403)
-        .json({ success: false, message: "Invalid refresh " });
+        .json({ success: false, message: "Invalid refresh token" });
     }
 
-    if (user.refreshTokenExpirey < Date.now()) {
+    if (user.refreshTokenExpiry < Date.now()) {
       return res.status(403).json({
         success: false,
         message: "Refresh token expired",
       });
     }
 
-    if (user.isBlocked) {
-      if (!user.blockedUntil) {
-        return res
-          .status(403)
-          .json({ success: false, message: "User permanently blocked" });
-      }
-
-      if (user.blockedUntil > new Date()) {
-        return res.status(403).json({
-          success: false,
-          message: `User blocked until ${user.blockedUntil}`,
-        });
-      }
-      user.isBlocked = false;
-      user.blockedUntil = null;
-      await user.save();
+    const blockStatus = await checkBlockedUser(user);
+    if (blockStatus.blocked) {
+      return res.status(blockStatus.status).json({
+        success: false,
+        message: blockStatus.message,
+      });
     }
 
-    const newAccessToken = genrateToken({
+    const newRefreshToken = generateRefreshToken({ _id: user._id });
+    user.refreshToken = hashToken(newRefreshToken);
+    user.refreshTokenExpiry = Date.now() + 7 * 24 * 60 * 60 * 1000;
+
+    await user.save();
+
+    const newAccessToken = generateToken({
       _id: user._id,
       isAdmin: user.isAdmin,
     });
     return res.status(200).json({
       success: true,
       accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
     });
   } catch (error) {
     next(error);
