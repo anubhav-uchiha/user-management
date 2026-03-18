@@ -70,7 +70,6 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     required: true,
-    unique: true,
     trim: true,
     match: [/^\S+@\S+\.\S+$/, "Invalid email"],
     index: true,
@@ -87,7 +86,6 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true,
-    unique: true,
     index: true,
     minlength: 10,
     maxlength: 13,
@@ -101,7 +99,7 @@ const userSchema = new mongoose.Schema({
     default: null,
     select: false,
   },
-  refreshTokenExpirey: {
+  refreshTokenExpiry: {
     type: Date,
     default: null,
   },
@@ -139,9 +137,16 @@ const userSchema = new mongoose.Schema({
   },
 });
 
-userSchema.index({ email: 1, is_deleted: 1 });
-userSchema.index({ phone: 1, is_deleted: 1 });
+userSchema.index(
+  { email: 1 },
+  { unique: true, partialFilterExpression: { is_deleted: false } },
+);
+userSchema.index(
+  { phone: 1 },
+  { unique: true, partialFilterExpression: { is_deleted: false } },
+);
 userSchema.index({ is_deleted: 1, isAdmin: 1 });
+userSchema.index({ isBlocked: 1, blockedUntil: 1 });
 
 const User = mongoose.model("User", userSchema);
 module.exports = User;

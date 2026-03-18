@@ -43,10 +43,12 @@ const updateUser = async (req, res, next) => {
       return next(error);
     }
 
-    const { email, phone, address } = req.body;
+    const { first_name, last_name, email, phone, address } = req.body;
 
     const emailTrim = email?.trim()?.toLowerCase();
     const phoneTrim = phone?.trim();
+    const firstNameTrim = first_name?.trim();
+    const lastNameTrim = last_name?.trim();
 
     // Prevent restricted updates
     if ("password" in req.body) {
@@ -67,24 +69,13 @@ const updateUser = async (req, res, next) => {
       return next(error);
     }
 
-    // Validate GEO coordinates if provided
-    if (address?.geo) {
-      const { lat, lng } = address.geo;
-
-      if (typeof lat !== "number" || typeof lng !== "number") {
-        const error = new Error("Geo coordinates must be numbers");
-        error.status = 400;
-        return next(error);
-      }
-
-      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-        const error = new Error("Invalid latitude or longitude");
-        error.status = 400;
-        return next(error);
-      }
+    // Email duplicate check
+    if (emailTrim && !validator.isEmail(emailTrim)) {
+      const error = new Error("Invalid email");
+      error.status = 400;
+      return next(error);
     }
 
-    // Email duplicate check
     if (emailTrim) {
       const duplicateEmail = await User.findOne({
         email: emailTrim,
@@ -100,6 +91,12 @@ const updateUser = async (req, res, next) => {
     }
 
     // Phone duplicate check
+    if (phoneTrim && !validator.isMobilePhone(phoneTrim, "any")) {
+      const error = new Error("Invalid phone number");
+      error.status = 400;
+      return next(error);
+    }
+
     if (phoneTrim) {
       const duplicatePhone = await User.findOne({
         phone: phoneTrim,
@@ -117,24 +114,57 @@ const updateUser = async (req, res, next) => {
     // Allowed fields
     const updateData = {};
 
-    if (req.body.first_name !== undefined) {
-      updateData.first_name = req.body.first_name?.trim();
+    if (firstNameTrim !== undefined) {
+      updateData.first_name = firstNameTrim?.trim();
     }
 
-    if (req.body.last_name !== undefined) {
-      updateData.last_name = req.body.last_name?.trim();
+    if (lastNameTrim !== undefined) {
+      updateData.last_name = lastNameTrim?.trim();
     }
 
     if (emailTrim) {
       updateData.email = emailTrim;
     }
 
-    if (phoneTrim) {
-      updateData.phone = phoneTrim;
+    if (phoneTrim !== undefined) {
+      updateData.phone = phoneTrim?.trim();
     }
 
-    if (address !== undefined) {
-      updateData.address = address;
+    if (
+      address !== undefined &&
+      typeof address === "object" &&
+      address !== null
+    ) {
+      if (address.city !== undefined) {
+        updateData["address.city"] = address.city?.trim()?.toLowerCase();
+      }
+      if (address.state !== undefined) {
+        updateData["address.state"] = address.state?.trim()?.toLowerCase();
+      }
+      if (address.country !== undefined) {
+        updateData["address.country"] = address.country?.trim()?.toLowerCase();
+      }
+      if (address.zipcode !== undefined) {
+        updateData["address.zipcode"] = address.zipcode?.trim();
+      }
+
+      if (address.geo !== undefined && address.geo !== null) {
+        const { lat, lng } = address.geo;
+
+        if (typeof lat !== "number" || typeof lng !== "number") {
+          const error = new Error("Geo coordinates must be numbers");
+          error.status = 400;
+          return next(error);
+        }
+
+        if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+          const error = new Error("Invalid latitude or longitude");
+          error.status = 400;
+          return next(error);
+        }
+
+        updateData["address.geo"] = { lat, lng };
+      }
     }
 
     updateData.updatedAt = new Date();
@@ -232,6 +262,8 @@ const changePassword = async (req, res, next) => {
     const hashedPassword = await hashPassword(newPassword);
 
     user.password = hashedPassword;
+    user.refreshToken = null;
+    user.refreshTokenExpiry = null;
     user.updatedAt = new Date();
     await user.save();
 
@@ -269,6 +301,8 @@ const softDeleteUser = async (req, res, next) => {
       },
       {
         is_deleted: true,
+        refreshToken: null,
+        refreshTokenExpiry: null,
         updatedAt: new Date(),
       },
       { new: true },
@@ -294,7 +328,8 @@ const logoutUser = async (req, res, next) => {
     const userId = req.user._id;
     await User.findByIdAndUpdate(userId, {
       refreshToken: null,
-      refreshTokenExpirey: null,
+      refreshTokenExpiry: null,
+      updatedAt: new Date(),
     });
     return res.status(200).json({
       success: true,
