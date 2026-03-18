@@ -8,17 +8,19 @@ const getAllUser = async (req, res, next) => {
     const pageSize = Math.min(Math.max(parseInt(page_size) || 10, 1), 100);
     const skip = (pageNo - 1) * pageSize;
 
-    const user = await User.find({ is_deleted: false, isAdmin: false })
-      .select("-password")
-      .skip(skip)
-      .limit(pageSize)
-      .lean()
-      .sort({ createdAt: 1 });
+    const [users, totalUsers] = await Promise.all([
+      User.find({ is_deleted: false, isAdmin: false })
+        .select("-password -refreshToken -refreshTokenExpiry")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(pageSize)
+        .lean(),
 
-    const totalUsers = await User.countDocuments({
-      is_deleted: false,
-      isAdmin: false,
-    });
+      User.countDocuments({
+        is_deleted: false,
+        isAdmin: false,
+      }),
+    ]);
 
     return res.status(200).json({
       success: true,
@@ -27,7 +29,7 @@ const getAllUser = async (req, res, next) => {
       page_size: pageSize,
       total_users: totalUsers,
       total_pages: Math.ceil(totalUsers / pageSize),
-      data: user,
+      data: users,
     });
   } catch (error) {
     next(error);
@@ -48,7 +50,7 @@ const getUserById = async (req, res, next) => {
       is_deleted: false,
       isAdmin: false,
     })
-      .select("-password")
+      .select("-password -refreshToken -refreshTokenExpiry")
       .lean();
 
     if (!user) {
@@ -69,20 +71,23 @@ const blockUser = async (req, res, next) => {
   try {
     const user_id = req.params.id;
     const { days, reason } = req.body;
-    const parsedDays = parseInt(days);
 
     if (!mongoose.Types.ObjectId.isValid(user_id)) {
-      return res.status(400).json({ message: "Invalid user" });
+      return res.status(400).json({ success: false, message: "Invalid user" });
     }
 
     if (req.user._id.toString() === user_id) {
-      return res.status(400).json({ message: "You cannot block yourself" });
+      return res
+        .status(400)
+        .json({ success: false, message: "You cannot block yourself" });
     }
 
     const user = await User.findById(user_id);
 
     if (!user || user.is_deleted) {
-      return res.status(404).json({ message: "User not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     if (user.isAdmin) {
@@ -91,33 +96,51 @@ const blockUser = async (req, res, next) => {
         .json({ success: false, message: "Admin user cannot be blocked" });
     }
 
-    if (user.isBlocked) {
-      return res.status(400).json({
-        success: false,
-        message: "User is already blocked",
-      });
+    if (
+      user.isBlocked &&
+      (!user.blockedUntil || user.blockedUntil > new Date())
+    ) {
+      return res
+        .status(400)
+        .json({ success: false, message: "User is already blocked" });
+    }
+
+    let blockedUntil = null;
+
+    if (days !== undefined) {
+      if (!Number.isInteger(Number(days))) {
+        return res.status(400).json({
+          success: false,
+          message: "Days must be a valid integer",
+        });
+      }
+
+      const parsedDays = Number(days);
+
+      if (parsedDays <= 0 || parsedDays > 365) {
+        return res.status(400).json({
+          success: false,
+          message: "Days must be between 1 and 365",
+        });
+      }
+
+      blockedUntil = new Date(Date.now() + parsedDays * 24 * 60 * 60 * 1000);
     }
 
     user.isBlocked = true;
+    user.blockedUntil = blockedUntil;
     user.blockReason = reason || "No reason provided";
     user.updatedAt = new Date();
 
-    if (parsedDays && parsedDays > 0) {
-      user.blockedUntil = new Date(
-        Date.now() + parsedDays * 24 * 60 * 60 * 1000,
-      );
-    } else {
-      user.blockedUntil = null;
-    }
-
     user.refreshToken = null;
-    user.refreshTokenExpirey = null;
+    user.refreshTokenExpiry = null;
+
     await user.save();
 
     return res.status(200).json({
       success: true,
-      message: user.blockedUntil
-        ? `User blocked for ${parsedDays} days`
+      message: blockedUntil
+        ? `User blocked for ${days} days`
         : "User permanently blocked",
     });
   } catch (error) {
