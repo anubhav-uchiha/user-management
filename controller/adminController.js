@@ -96,10 +96,7 @@ const blockUser = async (req, res, next) => {
         .json({ success: false, message: "Admin user cannot be blocked" });
     }
 
-    if (
-      user.isBlocked &&
-      (!user.blockedUntil || user.blockedUntil > new Date())
-    ) {
+    if (user.isBlocked) {
       return res
         .status(400)
         .json({ success: false, message: "User is already blocked" });
@@ -108,7 +105,7 @@ const blockUser = async (req, res, next) => {
     let blockedUntil = null;
 
     if (days !== undefined) {
-      if (!Number.isInteger(Number(days))) {
+      if (!Number.isInteger(Number(days)) || Number(days) <= 0) {
         return res.status(400).json({
           success: false,
           message: "Days must be a valid integer",
@@ -116,13 +113,6 @@ const blockUser = async (req, res, next) => {
       }
 
       const parsedDays = Number(days);
-
-      if (parsedDays <= 0 || parsedDays > 365) {
-        return res.status(400).json({
-          success: false,
-          message: "Days must be between 1 and 365",
-        });
-      }
 
       blockedUntil = new Date(Date.now() + parsedDays * 24 * 60 * 60 * 1000);
     }

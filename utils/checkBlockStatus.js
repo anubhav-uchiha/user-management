@@ -1,5 +1,7 @@
-const checkBlockedUser = async (user) => {
-  if (!user.isBlocked) return { blocked: false };
+const checkBlockedUser = (user) => {
+  if (!user.isBlocked) {
+    return { blocked: false };
+  }
 
   if (!user.blockedUntil) {
     return {
@@ -18,7 +20,11 @@ const checkBlockedUser = async (user) => {
   }
 
   // expired block (NO DB WRITE HERE)
-  return { blocked: false, expired: true };
+  return {
+    blocked: true,
+    status: 403,
+    message: "User is temporarily blocked (pending auto-unblock)",
+  };
 };
 
 module.exports = checkBlockedUser;
