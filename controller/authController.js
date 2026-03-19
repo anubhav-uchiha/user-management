@@ -153,18 +153,24 @@ const loginUser = async (req, res, next) => {
       is_deleted: false,
     }).select("+password");
 
-    if (!user || !(await comparePassword(passwordTrim, user.password))) {
+    if (!user) {
       const error = new Error("Invalid email or password");
       error.status = 401;
       return next(error);
     }
 
-    const blockStatus = await checkBlockedUser(user);
+    const blockStatus = checkBlockedUser(user);
     if (blockStatus.blocked) {
       return res.status(blockStatus.status).json({
         success: false,
         message: blockStatus.message,
       });
+    }
+
+    if (!(await comparePassword(passwordTrim, user.password))) {
+      const error = new Error("Invalid email or password");
+      error.status = 401;
+      return next(error);
     }
 
     const accessToken = generateToken({ _id: user._id, isAdmin: user.isAdmin });
@@ -217,8 +223,9 @@ const refreshAccessToken = async (req, res, next) => {
     const user = await User.findOne({
       _id: decoded._id,
       refreshToken: hashedToken,
+      refreshTokenExpiry: { $gt: new Date() },
       is_deleted: false,
-    }).select("+refreshToken refreshTokenExpiry");
+    }).select("+refreshToken +refreshTokenExpiry");
 
     if (!user || user.refreshToken !== hashedToken) {
       return res
@@ -233,7 +240,7 @@ const refreshAccessToken = async (req, res, next) => {
       });
     }
 
-    const blockStatus = await checkBlockedUser(user);
+    const blockStatus = checkBlockedUser(user);
     if (blockStatus.blocked) {
       return res.status(blockStatus.status).json({
         success: false,

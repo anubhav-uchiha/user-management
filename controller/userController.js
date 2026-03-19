@@ -115,26 +115,51 @@ const updateUser = async (req, res, next) => {
     const updateData = {};
 
     if (firstNameTrim !== undefined) {
-      updateData.first_name = firstNameTrim?.trim();
+      if (!firstNameTrim) {
+        const error = new Error("First name cannot be empty");
+        error.status = 400;
+        return next(error);
+      }
+      updateData.first_name = firstNameTrim;
     }
 
     if (lastNameTrim !== undefined) {
-      updateData.last_name = lastNameTrim?.trim();
+      if (!lastNameTrim) {
+        const error = new Error("Last name cannot be empty");
+        error.status = 400;
+        return next(error);
+      }
+      updateData.last_name = lastNameTrim;
     }
 
-    if (emailTrim) {
+    if (emailTrim !== undefined) {
+      if (!emailTrim) {
+        const error = new Error("Email cannot be empty");
+        error.status = 400;
+        return next(error);
+      }
       updateData.email = emailTrim;
     }
 
     if (phoneTrim !== undefined) {
+      if (!phoneTrim) {
+        const error = new Error("Phone cannot be empty");
+        error.status = 400;
+        return next(error);
+      }
       updateData.phone = phoneTrim?.trim();
     }
 
-    if (
-      address !== undefined &&
-      typeof address === "object" &&
-      address !== null
-    ) {
+    if (address !== undefined) {
+      if (
+        typeof address !== "object" ||
+        address === null ||
+        Array.isArray(address)
+      ) {
+        const error = new Error("address must be an object");
+        error.status = 400;
+        return next(error);
+      }
       if (address.city !== undefined) {
         updateData["address.city"] = address.city?.trim()?.toLowerCase();
       }
@@ -148,8 +173,14 @@ const updateUser = async (req, res, next) => {
         updateData["address.zipcode"] = address.zipcode?.trim();
       }
 
-      if (address.geo !== undefined && address.geo !== null) {
-        const { lat, lng } = address.geo;
+      if (address.geo !== undefined) {
+        const { lat, lng } = address.geo || {};
+
+        if (lat === undefined || lng === undefined) {
+          const error = new Error("Geo coordinates are required");
+          error.status = 400;
+          return next(error);
+        }
 
         if (typeof lat !== "number" || typeof lng !== "number") {
           const error = new Error("Geo coordinates must be numbers");
@@ -167,13 +198,19 @@ const updateUser = async (req, res, next) => {
       }
     }
 
+    if (Object.keys(updateData).length === 0) {
+      const error = new Error("No valid fields provided for update");
+      error.status = 400;
+      return next(error);
+    }
+
     updateData.updatedAt = new Date();
 
     const updatedUser = await User.findOneAndUpdate(
       { _id: user_id, is_deleted: false },
       { $set: updateData },
       { new: true, runValidators: true },
-    ).select("-password");
+    ).select("-password -refreshToken -refreshTokenExpiry");
 
     if (!updatedUser) {
       const error = new Error("User not found");

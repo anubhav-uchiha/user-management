@@ -30,7 +30,7 @@ const authenticateUser = async (req, res, next) => {
       });
     }
 
-    const blockStatus = await checkBlockedUser(user);
+    const blockStatus = checkBlockedUser(user);
 
     if (blockStatus.blocked) {
       return res.status(blockStatus.status).json({
