@@ -203,10 +203,9 @@ const refreshAccessToken = async (req, res, next) => {
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
-      return res.status(401).json({
-        success: false,
-        message: "Refresh token required",
-      });
+      const error = new Error("Refresh token required");
+      error.status = 401;
+      return next(error);
     }
 
     let decoded;
@@ -228,16 +227,15 @@ const refreshAccessToken = async (req, res, next) => {
     }).select("+refreshToken +refreshTokenExpiry");
 
     if (!user || user.refreshToken !== hashedToken) {
-      return res
-        .status(403)
-        .json({ success: false, message: "Invalid refresh token" });
+      const error = new Error("Invalid refresh token");
+      error.status = 403;
+      return next(error);
     }
 
     if (user.refreshTokenExpiry < Date.now()) {
-      return res.status(403).json({
-        success: false,
-        message: "Refresh token expired",
-      });
+      const error = new Error("Refresh token expired");
+      error.status = 403;
+      return next(error);
     }
 
     const blockStatus = checkBlockedUser(user);

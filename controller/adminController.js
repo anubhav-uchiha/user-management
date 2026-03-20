@@ -73,43 +73,44 @@ const blockUser = async (req, res, next) => {
     const { days, reason } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(user_id)) {
-      return res.status(400).json({ success: false, message: "Invalid user" });
+      const error = new Error("Invalid user");
+      error.status = 400;
+      return next(error);
     }
 
     if (req.user._id.toString() === user_id) {
-      return res
-        .status(400)
-        .json({ success: false, message: "You cannot block yourself" });
+      const error = new Error("You cannot block yourself");
+      error.status = 400;
+      return next(error);
     }
 
     const user = await User.findById(user_id);
 
     if (!user || user.is_deleted) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
+      const error = new Error("User not found");
+      error.status = 400;
+      return next(error);
     }
 
     if (user.isAdmin) {
-      return res
-        .status(403)
-        .json({ success: false, message: "Admin user cannot be blocked" });
+      const error = new Error("Admin user cannot be blocked");
+      error.status = 400;
+      return next(error);
     }
 
     if (user.isBlocked) {
-      return res
-        .status(400)
-        .json({ success: false, message: "User is already blocked" });
+      const error = new Error("User is already blocked");
+      error.status = 400;
+      return next(error);
     }
 
     let blockedUntil = null;
 
     if (days !== undefined) {
       if (!Number.isInteger(Number(days)) || Number(days) <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Days must be a valid integer",
-        });
+        const error = new Error("Days must be a valid integer");
+        error.status = 400;
+        return next(error);
       }
 
       const parsedDays = Number(days);
