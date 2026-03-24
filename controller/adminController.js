@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const User = require("../models/userModel");
+const { isBlock } = require("typescript");
 
 const getAllUser = async (req, res, next) => {
   try {
@@ -62,6 +63,64 @@ const getUserById = async (req, res, next) => {
     return res
       .status(200)
       .json({ success: true, message: "User detail: ", data: user });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const searchUser = async (req, res, next) => {
+  try {
+    const {
+      email,
+      phone,
+      name,
+      city,
+      isBlocked,
+      page_no = 1,
+      page_size = 10,
+    } = req.query;
+    const pageNo = Math.max(parseInt(page_no) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(page_size) || 10, 1), 100);
+    const skip = (pageNo - 1) * pageSize;
+
+    const filter = { isAdmin: false };
+    if (email) {
+      filter.email = { $regex: email?.trim(), $options: "i" };
+    }
+    if (phone) {
+      filter.phone = { $regex: phone?.trim(), $options: "i" };
+    }
+    if (name) {
+      filter.$or = [
+        { first_name: { $regex: name?.trim(), $options: "i" } },
+        { last_name: { $regex: name?.trim(), $options: "i" } },
+      ];
+    }
+    if (city) {
+      filter["address.city"] = { $regex: city?.trim(), $options: "i" };
+    }
+    if (isBlocked !== undefined) {
+      filter.isBlocked = isBlocked === "true";
+    }
+    const [user, total] = await Promise.all([
+      (
+        await User.find(filter)
+          .select("-password -refreshTpken -refreshTokenExpiry")
+          .skip(skip)
+          .limit(pageSize)
+      )
+        .toSorted({ createdAt: -1 })
+        .lean(),
+      User.countDocuments(filter),
+    ]);
+    return res.status(200).json({
+      success: true,
+      page_no: pageNo,
+      page_size: pageSize,
+      total,
+      total_pages: Math.ceil(total / pageSize),
+      data: user,
+    });
   } catch (error) {
     next(error);
   }
@@ -138,6 +197,43 @@ const blockUser = async (req, res, next) => {
     next(error);
   }
 };
+const unblockUser = async (req, res, next) => {
+  try {
+    const user_id = req.params.id;
+
+    if (!mongoose.Types.ObjectId.isValid(user_id)) {
+      const error = new Error("Invalid user");
+      error.status = 400;
+      return next(error);
+    }
+
+    const user = await User.findOneAndUpdate(
+      { _id: user_id, isAdmin: false },
+      {
+        isBlocked: false,
+        blockedUntil: null,
+        blockReason: "",
+        updatedAt: new Date(),
+      },
+      { new: true },
+    );
+
+    if (!user || user.is_deleted) {
+      const error = new Error("User not found");
+      error.status = 400;
+      return next(error);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: blockedUntil
+        ? `User blocked for ${days} days`
+        : "User permanently blocked",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 const deleteUserById = async (req, res, next) => {
   try {
@@ -187,7 +283,9 @@ const deleteAllUser = async (req, res, next) => {
 module.exports = {
   getAllUser,
   getUserById,
+  searchUser,
   blockUser,
+  unblockUser,
   deleteUserById,
   deleteAllUser,
 };
