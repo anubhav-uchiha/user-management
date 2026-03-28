@@ -2,6 +2,7 @@ const express = require("express");
 const {
   getMyProfile,
   changePassword,
+  uploadProfileImage,
   updateUser,
   softDeleteUser,
   logoutUser,
@@ -9,6 +10,7 @@ const {
 const authenticateUser = require("../middlewares/auth.middleware");
 const validate = require("../middlewares/validation.middleware");
 const { changePasswordSchema } = require("../validations/user.validation");
+const upload = require("../utils/multer");
 
 const router = express.Router();
 
@@ -18,6 +20,12 @@ router.patch(
   authenticateUser,
   validate(changePasswordSchema),
   changePassword,
+);
+router.patch(
+  "/uploadProfileImage",
+  authenticateUser,
+  upload.single("profileImgae"),
+  uploadProfileImage,
 );
 router.put("/updateUser", authenticateUser, updateUser);
 router.delete("/softDeleteUser/:id", authenticateUser, softDeleteUser);

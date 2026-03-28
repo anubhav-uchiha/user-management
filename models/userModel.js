@@ -94,6 +94,10 @@ const userSchema = new mongoose.Schema({
     type: addressSchema,
     required: true,
   },
+  profileImage: {
+    type: String,
+    default: null,
+  },
   refreshToken: {
     type: String,
     default: null,

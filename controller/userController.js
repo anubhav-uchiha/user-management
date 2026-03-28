@@ -312,6 +312,43 @@ const changePassword = async (req, res, next) => {
   }
 };
 
+const uploadProfileImage = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const file = req.file;
+    if (!file) {
+      const error = new Error("Image file is required");
+      error.status = 400;
+      return next(error);
+    }
+    if (!userId) {
+      const error = new Error("Invalid User");
+      error.status = 400;
+      return next(error);
+    }
+    const imagePath = file.path;
+    const user = await User.findOneAndUpdate(
+      { _id: userId, is_deleted: false },
+      { profileImage: imagePath, updatedAt: new Date() },
+      { new: true },
+    ).select("-password -refreshToken -refreshTokenExpiry");
+
+    if (!user) {
+      const error = new Error("No user Found");
+      error.status = 400;
+      return next(error);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Profule image upload successfully",
+      data: user,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const forgotPassword = async (req, res, next) => {};
 
 const softDeleteUser = async (req, res, next) => {
@@ -381,6 +418,7 @@ module.exports = {
   getMyProfile,
   updateUser,
   changePassword,
+  uploadProfileImage,
   softDeleteUser,
   logoutUser,
 };
