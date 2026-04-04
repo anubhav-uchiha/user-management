@@ -341,7 +341,7 @@ const uploadProfileImage = async (req, res, next) => {
 
     return res.status(200).json({
       success: true,
-      message: "Profule image upload successfully",
+      message: "Profile image upload successfully",
       data: user,
     });
   } catch (error) {
